@@ -7,5 +7,7 @@
 /cservice
 /luaclib
 *.so
+.idea/
 *.dSYM
 .DS_Store
+cmake-build-debug/

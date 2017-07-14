@@ -41,22 +41,22 @@
 #endif
 
 struct skynet_context {
-	void * instance;
-	struct skynet_module * mod;
-	void * cb_ud;
-	skynet_cb cb;
+	void * instance;				// 启动
+	struct skynet_module * mod;		// 服务对应的模块
+	void * cb_ud;					// 服务的数据
+	skynet_cb cb;					// 服务的回调
 	struct message_queue *queue;
 	FILE * logfile;
 	uint64_t cpu_cost;	// in microsec
 	uint64_t cpu_start;	// in microsec
-	char result[32];
-	uint32_t handle;
+	char result[32];				// ！！ 服务名字
+	uint32_t handle;				// 服务handle，高8为handle_storage.harbor，低24位为服务id
 	int session_id;
-	int ref;
+	int ref;						// 服务上下文被使用的次数，当ref降到0的时候，ctx会被销毁
 	int message_count;
-	bool init;
+	bool init;						// 是否已初始化
 	bool endless;
-	bool profile;
+	bool profile;					// 是否开启profile
 
 	CHECKCALLING_DECL
 };
@@ -137,7 +137,7 @@ skynet_context_new(const char * name, const char *param) {
 
 	ctx->mod = mod;
 	ctx->instance = inst;
-	ctx->ref = 2;
+	ctx->ref = 2;				// todo：为什么这里是2，然后又用skynet_context_release减ref
 	ctx->cb = NULL;
 	ctx->cb_ud = NULL;
 	ctx->session_id = 0;
@@ -165,7 +165,7 @@ skynet_context_new(const char * name, const char *param) {
 		if (ret) {
 			ctx->init = true;
 		}
-		skynet_globalmq_push(queue);
+		skynet_globalmq_push(queue);	// 把服务消息队列放到全局队列中
 		if (ret) {
 			skynet_error(ret, "LAUNCH %s %s", name, param ? param : "");
 		}
@@ -219,7 +219,7 @@ delete_context(struct skynet_context *ctx) {
 
 struct skynet_context * 
 skynet_context_release(struct skynet_context *ctx) {
-	if (ATOM_DEC(&ctx->ref) == 0) {
+	if (ATOM_DEC(&ctx->ref) == 0) {		// 在ref为0的时候才执行释放ctx
 		delete_context(ctx);
 		return NULL;
 	}

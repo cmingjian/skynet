@@ -19,14 +19,14 @@ struct handle_name {
 struct handle_storage {
 	struct rwlock lock;
 
-	uint32_t harbor;
-	uint32_t handle_index;
-	int slot_size;
-	struct skynet_context ** slot;
-	
-	int name_cap;
-	int name_count;
-	struct handle_name *name;
+	uint32_t harbor;				// 只有高8位有效，为harbor的id，低24位为0
+	uint32_t handle_index;			// 只有低24位有效，下一次启动服务的时候，使用的服务id，通过每次启动服务时自增来维护服务id的唯一性
+	int slot_size;					// 服务上下文数组的大小，只按2的倍数增长
+	struct skynet_context ** slot;	// 服务上下文数组,下标是服务的id
+
+	int name_cap;				// 服务名字允许的最大容量
+	int name_count;				// 服务名字数组的大小
+	struct handle_name *name;	// 服务名字数组，保证服务不会重名
 };
 
 static struct handle_storage *H = NULL;

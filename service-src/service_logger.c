@@ -64,8 +64,8 @@ logger_init(struct logger * inst, struct skynet_context *ctx, const char * parm)
 		inst->handle = stdout;
 	}
 	if (inst->handle) {
-		skynet_callback(ctx, inst, logger_cb);
-		skynet_command(ctx, "REG", ".logger");
+		skynet_callback(ctx, inst, logger_cb);		// 服务中需要手动注册回调
+		skynet_command(ctx, "REG", ".logger");		// 注册服务名为全局服务logger
 		return 0;
 	}
 	return 1;

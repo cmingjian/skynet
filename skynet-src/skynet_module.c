@@ -13,10 +13,10 @@
 #define MAX_MODULE_TYPE 32
 
 struct modules {
-	int count;
+	int count;									// 已加载的C模块个数
 	struct spinlock lock;
-	const char * path;
-	struct skynet_module m[MAX_MODULE_TYPE];
+	const char * path;							// 配置的cpath
+	struct skynet_module m[MAX_MODULE_TYPE];	// 已加载的C模块
 };
 
 static struct modules * M = NULL;
@@ -100,14 +100,14 @@ skynet_module_query(const char * name) {
 
 	result = _query(name); // double check
 
-	if (result == NULL && M->count < MAX_MODULE_TYPE) {
+	if (result == NULL && M->count < MAX_MODULE_TYPE) {	// 第一次查询，加载C服务
 		int index = M->count;
-		void * dl = _try_open(M,name);
+		void * dl = _try_open(M,name);					// 在cpath中查找出名字为name的c服务对应的动态库，用dlopen打开并返回
 		if (dl) {
 			M->m[index].name = name;
 			M->m[index].module = dl;
 
-			if (_open_sym(&M->m[index]) == 0) {
+			if (_open_sym(&M->m[index]) == 0) {			// 加载c服务的各个回调方法
 				M->m[index].name = skynet_strdup(name);
 				M->count ++;
 				result = &M->m[index];

@@ -33,8 +33,8 @@ struct message_queue {
 };
 
 struct global_queue {
-	struct message_queue *head;
-	struct message_queue *tail;
+	struct message_queue *head;		// 指向第一个消息队列
+	struct message_queue *tail;		// 指向最后一个消息队列
 	struct spinlock lock;
 };
 

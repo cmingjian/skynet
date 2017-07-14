@@ -51,8 +51,10 @@ optstring(const char *key,const char * opt) {
 
 static void
 _init_env(lua_State *L) {
+	// 以下代码是lua_next文档中展示的，遍历一个table的方法
 	lua_pushnil(L);  /* first key */
 	while (lua_next(L, -2) != 0) {
+		// 调用lua_next以后，'key' (at index -2) and 'value' (at index -1)
 		int keyt = lua_type(L, -2);
 		if (keyt != LUA_TSTRING) {
 			fprintf(stderr, "Invalid config table\n");
@@ -70,7 +72,7 @@ _init_env(lua_State *L) {
 			}
 			skynet_setenv(key,value);
 		}
-		lua_pop(L,1);
+		lua_pop(L,1);	/* removes 'value'; keeps 'key' for next iteration */
 	}
 	lua_pop(L,1);
 }
@@ -78,7 +80,7 @@ _init_env(lua_State *L) {
 int sigign() {
 	struct sigaction sa;
 	sa.sa_handler = SIG_IGN;
-	sigaction(SIGPIPE, &sa, 0);
+	sigaction(SIGPIPE, &sa, 0);		// 避免服务端往关掉的socket写数据时发出SIGPIPE信号
 	return 0;
 }
 

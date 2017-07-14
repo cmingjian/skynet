@@ -8,10 +8,11 @@ typedef int (*skynet_dl_init)(void * inst, struct skynet_context *, const char *
 typedef void (*skynet_dl_release)(void * inst);
 typedef void (*skynet_dl_signal)(void * inst, int signal);
 
+// 存放C模块的名字
 struct skynet_module {
-	const char * name;
-	void * module;
-	skynet_dl_create create;
+	const char * name;			// 存放C模块的
+	void * module;				// dlopen打开的模块
+	skynet_dl_create create;	// dlsym加载的各个方法
 	skynet_dl_init init;
 	skynet_dl_release release;
 	skynet_dl_signal signal;
