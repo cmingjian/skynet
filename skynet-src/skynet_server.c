@@ -65,7 +65,7 @@ struct skynet_node {
 	int total;
 	int init;
 	uint32_t monitor_exit;
-	pthread_key_t handle_key;
+	pthread_key_t handle_key;				// handle的key
 	bool profile;	// default is off
 };
 
@@ -159,6 +159,7 @@ skynet_context_new(const char * name, const char *param) {
 
 	CHECKCALLING_BEGIN(ctx)
 	int r = skynet_module_instance_init(mod, inst, ctx, param);
+	// 返回0表示初始化成功，否则表示初始化失败
 	CHECKCALLING_END(ctx)
 	if (r == 0) {
 		struct skynet_context * ret = skynet_context_release(ctx);
@@ -269,7 +270,7 @@ dispatch_message(struct skynet_context *ctx, struct skynet_message *msg) {
 	}
 	++ctx->message_count;
 	int reserve_msg;
-	if (ctx->profile) {
+	if (ctx->profile) {		// 如果开了profile，就会统计skynet每个消息
 		ctx->cpu_start = skynet_thread_time();
 		reserve_msg = ctx->cb(ctx, ctx->cb_ud, type, msg->session, msg->source, msg->data, sz);
 		uint64_t cost_time = skynet_thread_time() - ctx->cpu_start;
@@ -307,7 +308,7 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 	if (ctx == NULL) {
 		struct drop_t d = { handle };
 		skynet_mq_release(q, drop_message, &d);
-		return skynet_globalmq_pop();
+		return skynet_globalmq_pop();				// ?
 	}
 
 	int i,n=1;
@@ -315,18 +316,20 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 
 	for (i=0;i<n;i++) {
 		if (skynet_mq_pop(q,&msg)) {
+			// 如果没有消息
 			skynet_context_release(ctx);
 			return skynet_globalmq_pop();
 		} else if (i==0 && weight >= 0) {
+			// 如果有消息，且是第一条消息，根据权重算出一次取多少消息
 			n = skynet_mq_length(q);
-			n >>= weight;
+			n >>= weight;	// hahaha
 		}
 		int overload = skynet_mq_overload(q);
 		if (overload) {
 			skynet_error(ctx, "May overload, message queue length = %d", overload);
 		}
 
-		skynet_monitor_trigger(sm, msg.source , handle);
+		skynet_monitor_trigger(sm, msg.source , handle);	// 触发这条消息超时统计
 
 		if (ctx->cb == NULL) {
 			skynet_free(msg.data);
@@ -334,7 +337,7 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 			dispatch_message(ctx, &msg);
 		}
 
-		skynet_monitor_trigger(sm, 0,0);
+		skynet_monitor_trigger(sm, 0,0);	// 关闭这条消息超时统计
 	}
 
 	assert(q == ctx->queue);
@@ -707,14 +710,14 @@ skynet_send(struct skynet_context * context, uint32_t source, uint32_t destinati
 	}
 	_filter_args(context, type, &session, (void **)&data, &sz);
 
-	if (source == 0) {
+	if (source == 0) {		// 传入的source是0，本服务发给自己的消息
 		source = context->handle;
 	}
 
 	if (destination == 0) {
 		return session;
 	}
-	if (skynet_harbor_message_isremote(destination)) {
+	if (skynet_harbor_message_isremote(destination)) {	// master-slave模式下，发给其他harbor上的服务
 		struct remote_message * rmsg = skynet_malloc(sizeof(*rmsg));
 		rmsg->destination.handle = destination;
 		rmsg->message = data;
@@ -767,12 +770,12 @@ skynet_sendname(struct skynet_context * context, uint32_t source, const char * a
 	return skynet_send(context, source, des, type, session, data, sz);
 }
 
-uint32_t 
+uint32_t
 skynet_context_handle(struct skynet_context *ctx) {
 	return ctx->handle;
 }
 
-void 
+void
 skynet_callback(struct skynet_context * context, void *ud, skynet_cb cb) {
 	context->cb = cb;
 	context->cb_ud = ud;

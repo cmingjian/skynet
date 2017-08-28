@@ -24,8 +24,8 @@ struct message_queue {
 	int cap;
 	int head;
 	int tail;
-	int release;
-	int in_global;
+	int release;			// 是否已释放
+	int in_global;			// 是否在一级队列里（即全局队列）
 	int overload;
 	int overload_threshold;
 	struct skynet_message *queue;
@@ -41,7 +41,7 @@ struct global_queue {
 static struct global_queue *Q = NULL;
 
 void 
-skynet_globalmq_push(struct message_queue * queue) {
+skynet_globalmq_push(struct message_queue * queue) {	// 往全局队列里，放入一个消息队列(真的是拿出来，返回的消息队列是从一级队列里删除的)
 	struct global_queue *q= Q;
 
 	SPIN_LOCK(q)
@@ -56,7 +56,7 @@ skynet_globalmq_push(struct message_queue * queue) {
 }
 
 struct message_queue * 
-skynet_globalmq_pop() {
+skynet_globalmq_pop() {			// 从全局队列里，拿出一个消息队列(真的是拿出来，返回的消息队列是从一级队列里删除的)
 	struct global_queue *q = Q;
 
 	SPIN_LOCK(q)

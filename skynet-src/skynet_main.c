@@ -143,6 +143,7 @@ main(int argc, char *argv[]) {
 
 	skynet_start(&config);
 	skynet_globalexit();
+	//对应上面的luaS_initshr()
 	luaS_exitshr();
 
 	return 0;

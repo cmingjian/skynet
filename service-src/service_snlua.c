@@ -109,8 +109,8 @@ init_cb(struct snlua *l, struct skynet_context *ctx, const char * args, size_t s
 		report_launcher_error(ctx);
 		return 1;
 	}
-	lua_pushlstring(L, args, sz);
-	r = lua_pcall(L,1,0,1);
+	lua_pushlstring(L, args, sz);		// 这个就是snlua的参数
+	r = lua_pcall(L,1,0,1);				// 注册skynet的start方法，见bootstrap
 	if (r != LUA_OK) {
 		skynet_error(ctx, "lua loader error : %s", lua_tostring(L, -1));
 		report_launcher_error(ctx);

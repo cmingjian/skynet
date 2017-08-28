@@ -11,7 +11,7 @@
 #define LOG_MESSAGE_SIZE 256
 
 void 
-skynet_error(struct skynet_context * context, const char *msg, ...) {
+skynet_error(struct skynet_context * context, const char *msg, ...) {	// 就是发错误消息给logger服务
 	static uint32_t logger = 0;
 	if (logger == 0) {
 		logger = skynet_handle_findname("logger");

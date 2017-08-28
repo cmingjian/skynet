@@ -24,7 +24,7 @@ struct handle_storage {
 	int slot_size;					// 服务上下文数组的大小，只按2的倍数增长
 	struct skynet_context ** slot;	// 服务上下文数组,下标是服务的id
 
-	int name_cap;				// 服务名字允许的最大容量
+	int name_cap;				// 服务名字允许的 最大容量
 	int name_count;				// 服务名字数组的大小
 	struct handle_name *name;	// 服务名字数组，保证服务不会重名
 };

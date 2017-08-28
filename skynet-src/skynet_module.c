@@ -103,7 +103,7 @@ skynet_module_query(const char * name) {
 	if (result == NULL && M->count < MAX_MODULE_TYPE) {	// 第一次查询，加载C服务
 		int index = M->count;
 		void * dl = _try_open(M,name);					// 在cpath中查找出名字为name的c服务对应的动态库，用dlopen打开并返回
-		if (dl) {
+		if (dl) {										// 更新C模块的信息到全局变量M（用于下次查询）
 			M->m[index].name = name;
 			M->m[index].module = dl;
 

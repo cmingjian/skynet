@@ -9,6 +9,7 @@
 #include "skynet.h"
 #include "atomic.h"
 
+// 再申请和释放内存的时候加的hook代码，用来统计内存使用信息
 static size_t _used_memory = 0;
 static size_t _memory_block = 0;
 typedef struct _mem_data {

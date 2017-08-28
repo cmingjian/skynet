@@ -1,6 +1,7 @@
 #ifndef SKYNET_RWLOCK_H
 #define SKYNET_RWLOCK_H
 
+// 用到的锁操作，有pthread和自旋锁操作
 #ifndef USE_PTHREAD_LOCK
 
 struct rwlock {

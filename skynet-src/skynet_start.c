@@ -91,18 +91,18 @@ free_monitor(struct monitor *m) {
 }
 
 static void *
-thread_monitor(void *p) {
+thread_monitor(void *p) {		// monitor线程，检查是否有消息处理时间过长
 	struct monitor * m = p;
 	int i;
 	int n = m->count;
 	skynet_initthread(THREAD_MONITOR);
 	for (;;) {
-		CHECK_ABORT
+		CHECK_ABORT			// 如果消息队列已经空了就不检查了
 		for (i=0;i<n;i++) {
-			skynet_monitor_check(m->m[i]);
+			skynet_monitor_check(m->m[i]);		// 如果有一个工作线程处理某个消息，耗时超过五秒钟，就认为是无限循环
 		}
 		for (i=0;i<5;i++) {
-			CHECK_ABORT
+			CHECK_ABORT		// 如果消息队列已经空了就不检查了
 			sleep(1);
 		}
 	}
@@ -159,7 +159,7 @@ thread_worker(void *p) {
 	skynet_initthread(THREAD_WORKER);
 	struct message_queue * q = NULL;
 	while (!m->quit) {
-		q = skynet_context_message_dispatch(sm, q, weight);
+		q = skynet_context_message_dispatch(sm, q, weight);		// dispatch消息！
 		if (q == NULL) {
 			if (pthread_mutex_lock(&m->mutex) == 0) {
 				++ m->sleep;
@@ -180,7 +180,7 @@ thread_worker(void *p) {
 
 static void
 start(int thread) {
-	pthread_t pid[thread+3];
+	pthread_t pid[thread+3];	// +3是因为肯定会启动三个线程
 
 	struct monitor *m = skynet_malloc(sizeof(*m));
 	memset(m, 0, sizeof(*m));
@@ -205,10 +205,10 @@ start(int thread) {
 	create_thread(&pid[1], thread_timer, m);
 	create_thread(&pid[2], thread_socket, m);
 
-	static int weight[] = { 
+	static int weight[] = {
 		-1, -1, -1, -1, 0, 0, 0, 0,
-		1, 1, 1, 1, 1, 1, 1, 1, 
-		2, 2, 2, 2, 2, 2, 2, 2, 
+		1, 1, 1, 1, 1, 1, 1, 1,
+		2, 2, 2, 2, 2, 2, 2, 2,
 		3, 3, 3, 3, 3, 3, 3, 3, };
 	struct worker_parm wp[thread];
 	for (i=0;i<thread;i++) {
@@ -223,7 +223,7 @@ start(int thread) {
 	}
 
 	for (i=0;i<thread+3;i++) {
-		pthread_join(pid[i], NULL); 
+		pthread_join(pid[i], NULL);
 	}
 
 	free_monitor(m);
@@ -243,12 +243,12 @@ bootstrap(struct skynet_context * logger, const char * cmdline) {
 	}
 }
 
-void 
+void
 skynet_start(struct skynet_config * config) {
 	// register SIGHUP for log file reopen
 	struct sigaction sa;
 	sa.sa_handler = &handle_hup;
-	sa.sa_flags = SA_RESTART;
+	sa.sa_flags = SA_RESTART;		// 不把Ctrl+c作为程序输入
 	sigfillset(&sa.sa_mask);
 	sigaction(SIGHUP, &sa, NULL);
 
@@ -257,14 +257,15 @@ skynet_start(struct skynet_config * config) {
 			exit(1);
 		}
 	}
-	skynet_harbor_init(config->harbor);
-	skynet_handle_init(config->harbor);
-	skynet_mq_init();
-	skynet_module_init(config->module_path);
-	skynet_timer_init();
-	skynet_socket_init();
+	skynet_harbor_init(config->harbor);			// 配置文件中harbor作为高8位
+	skynet_handle_init(config->harbor);			// 初始化句柄模块，用于给每个Skynet服务创建一个全局唯一的句柄值
+	skynet_mq_init();							// 初始化消息队列模块，这是Skynet的主要数据结构
+	skynet_module_init(config->module_path);	// C服务查找路径初始化，以后就从这里配置的路径查找C服务了
+	skynet_timer_init();						// 定时器初始化
+	skynet_socket_init();						// socket初始化
 	skynet_profile_enable(config->profile);
 
+	// 创建第一个C服务logger
 	struct skynet_context *ctx = skynet_context_new(config->logservice, config->logger);
 	if (ctx == NULL) {
 		fprintf(stderr, "Can't launch %s service\n", config->logservice);

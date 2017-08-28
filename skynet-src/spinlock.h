@@ -6,6 +6,7 @@
 #define SPIN_UNLOCK(q) spinlock_unlock(&(q)->lock);
 #define SPIN_DESTROY(q) spinlock_destroy(&(q)->lock);
 
+#define USE_PTHREAD_LOCK
 #ifndef USE_PTHREAD_LOCK
 
 struct spinlock {

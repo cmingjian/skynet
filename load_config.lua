@@ -7,7 +7,7 @@ local function include(filename)
     local last_path = current_path
     local path, name = filename:match([[(.*]]..sep..[[)(.*)$]])
     if path then
-        if path:sub(1,1) == sep then	-- root
+        if path:sub(1,1) == sep then	-- root路径前面就不加./了
             current_path = path
         else
             current_path = current_path .. path
