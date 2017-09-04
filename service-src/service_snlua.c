@@ -85,6 +85,7 @@ init_cb(struct snlua *l, struct skynet_context *ctx, const char * args, size_t s
 	luaL_requiref(L, "skynet.codecache", codecache , 0);
 	lua_pop(L,1);
 
+	// 除了C模块的路径是在skynet_module_init中设置的，其余路径均在这里设置
 	const char *path = optstring(ctx, "lua_path","./lualib/?.lua;./lualib/?/init.lua");
 	lua_pushstring(L, path);
 	lua_setglobal(L, "LUA_PATH");
@@ -133,6 +134,7 @@ init_cb(struct snlua *l, struct skynet_context *ctx, const char * args, size_t s
 
 static int
 launch_cb(struct skynet_context * context, void *ud, int type, int session, uint32_t source , const void * msg, size_t sz) {
+	// 这个回调只会处理(snlua_init发送的）第一个消息，处理完以后，回调被设为NULL
 	assert(type == 0 && session == 0);
 	struct snlua *l = ud;
 	skynet_callback(context, NULL, NULL);
@@ -153,6 +155,7 @@ snlua_init(struct snlua *l, struct skynet_context *ctx, const char * args) {
 	const char * self = skynet_command(ctx, "REG", NULL);
 	uint32_t handle_id = strtoul(self+1, NULL, 16);
 	// it must be first message
+	// 传入的是0，在内部会转换成该服务的handle_id
 	skynet_send(ctx, 0, handle_id, PTYPE_TAG_DONTCOPY,0, tmp, sz);
 	return 0;
 }

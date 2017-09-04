@@ -51,7 +51,7 @@ struct skynet_context {
 	uint64_t cpu_start;	// in microsec
 	char result[32];				// ！！ 服务名字
 	uint32_t handle;				// 服务handle，高8为handle_storage.harbor，低24位为服务id
-	int session_id;
+	int session_id;					// 前一个消息的session_id, 当消息类型为PTYPE_TAG_ALLOCSESSION时，自动分配session_id
 	int ref;						// 服务上下文被使用的次数，当ref降到0的时候，ctx会被销毁
 	int message_count;
 	bool init;						// 是否已初始化
@@ -334,6 +334,7 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 		if (ctx->cb == NULL) {
 			skynet_free(msg.data);
 		} else {
+			// 在这里调用回调方法
 			dispatch_message(ctx, &msg);
 		}
 
@@ -680,8 +681,8 @@ skynet_command(struct skynet_context * context, const char * cmd , const char * 
 
 static void
 _filter_args(struct skynet_context * context, int type, int *session, void ** data, size_t * sz) {
-	int needcopy = !(type & PTYPE_TAG_DONTCOPY);
-	int allocsession = type & PTYPE_TAG_ALLOCSESSION;
+	int needcopy = !(type & PTYPE_TAG_DONTCOPY);		// 消息是否需要拷贝
+	int allocsession = type & PTYPE_TAG_ALLOCSESSION;	// 是否需要为消息分配新的session
 	type &= 0xff;
 
 	if (allocsession) {
@@ -699,6 +700,7 @@ _filter_args(struct skynet_context * context, int type, int *session, void ** da
 	*sz |= (size_t)type << MESSAGE_TYPE_SHIFT;
 }
 
+/* 向服务发送消息 */
 int
 skynet_send(struct skynet_context * context, uint32_t source, uint32_t destination , int type, int session, void * data, size_t sz) {
 	if ((sz & MESSAGE_TYPE_MASK) != sz) {
@@ -723,7 +725,7 @@ skynet_send(struct skynet_context * context, uint32_t source, uint32_t destinati
 		rmsg->message = data;
 		rmsg->sz = sz;
 		skynet_harbor_send(rmsg, source, session);
-	} else {
+	} else { 	// 否则把消息放到目标服务的消息队列
 		struct skynet_message smsg;
 		smsg.source = source;
 		smsg.session = session;
