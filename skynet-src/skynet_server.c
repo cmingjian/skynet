@@ -227,6 +227,7 @@ skynet_context_release(struct skynet_context *ctx) {
 	return ctx;
 }
 
+// 向某个服务发送消息的函数，阅读调用过它的方法，找到不同的消息入口
 int
 skynet_context_push(uint32_t handle, struct skynet_message *message) {
 	struct skynet_context * ctx = skynet_handle_grab(handle);

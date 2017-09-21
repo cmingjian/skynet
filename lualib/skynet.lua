@@ -8,8 +8,8 @@ local pcall = pcall
 
 local profile = require "profile"
 
-local coroutine_resume = profile.resume
-local coroutine_yield = profile.yield
+local coroutine_resume = profile.resume	-- 功能和coroutine.resume一模一样, profile模块封装了记录时间的操作
+local coroutine_yield = profile.yield	-- 功能和coroutine.yield一模一样，同上
 
 local proto = {}
 local skynet = {
@@ -56,6 +56,7 @@ local error_queue = {}
 local fork_queue = {}
 
 -- suspend is function
+-- 在下面有定义
 local suspend
 
 local function string_to_handle(str)
@@ -97,16 +98,35 @@ end
 
 local coroutine_pool = setmetatable({}, { __mode = "kv" })
 
+-- 不直接使用coroutine.create，是为了避免频繁创建协程
+-- 之所以要复用coroutine（而不是每处理一个消息创建一个协程），是因为如果每处理一个消息创建一个协程，内存会等到luaGC的时候才被回收
+-- https://blog.codingnow.com/2013/07/coroutine_reuse.html
+-- 同时要先理解协程的工作方式,对于coroutine.resume (co [, val1, ···])
+-- 当你第一次resume一个协程，它会从主体函数处开始运行。 val1, ... 这些值会以参数形式传入主体函数。
+-- 如果该协程被让出，resume 会重新启动它； val1, ... 这些参数会作为让出点的返回值。
+
+-- 参考：http://cloudwu.github.io/lua53doc/manual.html#pdf-coroutine.resume
+-- 两种情况：
+-- 情况1.coroutine_pool为空，创建协程co，
+-- 在raw_dispatch_message中调用coroutine_resume时，co中的匿名函数被调用，处理消息的方法f被调用，
+-- 其后f=nil，并将协程放到coroutine_pool，通过coroutine_yield返回 true, "EXIT"
+-- 不管是新建协程还是复用协程的流程，调用 coroutine_yield "EXIT"后都会返回到 raw_dispatch_message 的第35行，执行 suspend 后此次流程才算真正的完成
+-- 情况2.coroutine_pool不为空，先从数组中取出 coroutine，（注意这种情况下coroutine_resume会调用两次）
+-- 第一次调用coroutine_resume在co_create中，参数只有f（即消息的处理函数）,（参考lua文档，coroutine.resume作用是，如果该协程被让出，
+-- resume 会重新启动它； resume除了第一个以外的参数，会作为让出点的返回值。传递给co中的上值func
+-- 第二次调用coroutine_resume在raw_dispatch_message中，参数是消息处理函数的参数，调用消息处理函数，
 local function co_create(f)
-	local co = table.remove(coroutine_pool)
+	local co = table.remove(coroutine_pool)		-- 先从数组中取出 coroutine ，从数组中删除是禁止此 coroutine 被其他消息使用
 	if co == nil then
 		co = coroutine.create(function(...)
-			f(...)
+			local func = f
+			func(...)	-- 执行我们传入的函数
 			while true do
-				f = nil
+				-- 执行完后回收 coroutine
+				func = nil
 				coroutine_pool[#coroutine_pool+1] = co
-				f = coroutine_yield "EXIT"
-				f(coroutine_yield())
+				func = coroutine_yield "EXIT"
+				func(coroutine_yield())
 			end
 		end)
 	else
@@ -358,7 +378,8 @@ end
 
 function skynet.send(addr, typename, ...)
 	local p = proto[typename]
-	return c.send(addr, p.id, 0 , p.pack(...))
+	return c.send(addr, p.id, 0 , p.pack(...))	-- 返回新消息的session
+	-- 第三个参数为session，这里为0是因为skynet.send不需要返回值，所以发送完后这里流程就完全结束了。A的此次发送消息任务已经完全完成了。
 end
 
 skynet.genid = assert(c.genid)
@@ -373,6 +394,7 @@ skynet.unpack = assert(c.unpack)
 skynet.tostring = assert(c.tostring)
 skynet.trash = assert(c.trash)
 
+		-- 阻塞等待返回值
 local function yield_call(service, session)
 	watching_session[session] = service
 	local succ, msg, sz = coroutine_yield("CALL", session)
@@ -386,6 +408,8 @@ end
 function skynet.call(addr, typename, ...)
 	local p = proto[typename]
 	local session = c.send(addr, p.id , nil , p.pack(...))
+	-- 由于skynet.call是需要返回值的，所以c.send的第三个参数nil表示由框架自动分配一个session
+	-- 以便返回时根据相应的session找到对应的协程进行处理
 	if session == nil then
 		error("call to invalid address " .. skynet.address(addr))
 	end
@@ -401,6 +425,7 @@ end
 function skynet.ret(msg, sz)
 	msg = msg or ""
 	return coroutine_yield("RETURN", msg, sz)
+	--会让出到raw_dispatch_message函数中，参数给suspend,就成为:suspend(co, true, "RETURN", msg, sz)
 end
 
 function skynet.response(pack)
@@ -423,7 +448,8 @@ function skynet.dispatch(typename, func)
 	local p = proto[typename]
 	if func then
 		local ret = p.dispatch
-		p.dispatch = func
+		p.dispatch = func		-- 设置.dispatch即可，因为在require“skynet”的时候，会调用skynet.register_protocol，注册lua消息
+								-- (见本文件后续，----- register protocol以后的部分代码)
 		return ret
 	else
 		return p and p.dispatch
@@ -463,7 +489,7 @@ end
 
 local function raw_dispatch_message(prototype, msg, sz, session, source)
 	-- skynet.PTYPE_RESPONSE = 1, read skynet.h
-	if prototype == 1 then
+	if prototype == 1 then	--是不是等待返回的协程（类似于erlang的call中，send以后的receive）
 		local co = session_id_coroutine[session]
 		if co == "BREAK" then
 			session_id_coroutine[session] = nil
@@ -494,6 +520,7 @@ local function raw_dispatch_message(prototype, msg, sz, session, source)
 			local co = co_create(f)
 			session_coroutine_id[co] = session
 			session_coroutine_address[co] = source
+			-- coroutine_resume 返回的参数(true, "EXIT")给 suspend 作为参数，此次
 			suspend(co, coroutine_resume(co, session,source, p.unpack(msg,sz)))
 		elseif session ~= 0 then
 			c.send(source, skynet.PTYPE_ERROR, session, "")
@@ -503,9 +530,11 @@ local function raw_dispatch_message(prototype, msg, sz, session, source)
 	end
 end
 
+-- 服务接受到消息以后，这个回调会被执行，原因：见skynet.start
 function skynet.dispatch_message(...)
 	local succ, err = pcall(raw_dispatch_message,...)
 	while true do
+		-- 如果有skynet.fork创建的协程，在处理完消息以后，suspend这些协程
 		local key,co = next(fork_queue)
 		if co == nil then
 			break
@@ -634,8 +663,16 @@ function skynet.init_service(start)
 	end
 end
 
+-- 通常使用的方式,可以再start_func中加入对dispatch的调用，比如：
+--[[
+	skynet.dispatch("lua", function(_,_, command, ...)
+		local f = CMD[command]
+		skynet.ret(skynet.pack(f(...)))
+	end)
+ ]]
+
 function skynet.start(start_func)
-	c.callback(skynet.dispatch_message)
+	c.callback(skynet.dispatch_message)		-- 调用完以后,后续消息都使用这个回调方法来处理
 	skynet.timeout(0, function()
 		skynet.init_service(start_func)
 	end)

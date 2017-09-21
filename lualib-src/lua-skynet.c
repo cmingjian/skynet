@@ -1,5 +1,6 @@
 #include "skynet.h"
 #include "lua-seri.h"
+#include "syslog.h"
 
 #define KNRM  "\x1B[0m"
 #define KRED  "\x1B[31m"
@@ -83,7 +84,7 @@ forward_cb(struct skynet_context * context, void * ud, int type, int session, ui
 static int
 lcallback(lua_State *L) {
 	struct skynet_context * context = lua_touserdata(L, lua_upvalueindex(1));
-	int forward = lua_toboolean(L, 2);
+	int forward = lua_toboolean(L, 2);		// 第二个参数是可选的,默认为false, 消息不会被删除???
 	luaL_checktype(L,1,LUA_TFUNCTION);
 	lua_settop(L,1);
 	lua_rawsetp(L, LUA_REGISTRYINDEX, _cb);
@@ -174,7 +175,7 @@ get_dest_string(lua_State *L, int index) {
 
 /*
 	uint32 address
-	 string address
+	 string address（第一个参数类型可以是整形，也可以是字符串）
 	integer type
 	integer session
 	string message
@@ -183,8 +184,8 @@ get_dest_string(lua_State *L, int index) {
  */
 static int
 lsend(lua_State *L) {
-	struct skynet_context * context = lua_touserdata(L, lua_upvalueindex(1));
-	uint32_t dest = (uint32_t)lua_tointeger(L, 1);
+	struct skynet_context * context = lua_touserdata(L, lua_upvalueindex(1));	//得到源服务的结构体
+	uint32_t dest = (uint32_t)lua_tointeger(L, 1);	//得到目标服务的地址，如果不是整数就返回0
 	const char * dest_string = NULL;
 	if (dest == 0) {
 		if (lua_type(L,1) == LUA_TNUMBER) {
@@ -201,17 +202,17 @@ lsend(lua_State *L) {
 		session = luaL_checkinteger(L,3);
 	}
 
-	int mtype = lua_type(L,4);
+	int mtype = lua_type(L,4);	 //得到传递的参数类型
 	switch (mtype) {
-	case LUA_TSTRING: {
+	case LUA_TSTRING: {	//如果参数类型是字符串
 		size_t len = 0;
 		void * msg = (void *)lua_tolstring(L,4,&len);
 		if (len == 0) {
 			msg = NULL;
 		}
-		if (dest_string) {
+		if (dest_string) {	//如果是字符串地址
 			session = skynet_sendname(context, 0, dest_string, type, session , msg, len);
-		} else {
+		} else {	//如果是数字地址
 			session = skynet_send(context, 0, dest, type, session , msg, len);
 		}
 		break;

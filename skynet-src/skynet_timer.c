@@ -26,7 +26,16 @@ typedef void (*timer_execute_func)(void *ud,void *arg);
 #define TIME_LEVEL (1 << TIME_LEVEL_SHIFT)
 #define TIME_NEAR_MASK (TIME_NEAR-1)
 #define TIME_LEVEL_MASK (TIME_LEVEL-1)
-
+/*
+就是一个定时器线程，skynet 框架的定时任务(skynet.timeout)就是就是通过它来做的。
+ 它是模拟linux下的时间片轮转的方式。每过1/100秒就转一个刻度(想象一下水表)。
+ 定时器线程主要分为5个层级，从低层级到高层级的粒度分别为:256、64、64、64、64，当我们需要向skynet框架注册一个定时器时，
+ 就算出与当前时间对应的偏移值，将其链接到对应的层级的节点。就像齿轮一样，只要有动力它就会一直转，转到某个层级的节点如果发现其下链接有事件，
+ 就会将对应的事件链表依次取出，找到是哪个服务注册的定时器，将向那个服务压入一条定时器消息，等待worker线程的处理，一直到这个链表为空，
+ 齿轮才会转到下一个时间节点。如果低层级的齿轮转完了，就将高层级的一个节点继续分配到最低层级的齿轮上去。
+ 链接参考: 浅析 Linux 中的时间编程和实现原理，第 3 部分: Linux 内核的工作，前面部分一起看可能会好点。
+ http://us9.campaign-archive1.com/?u=4188b6afbe9e5d43111fef4d4&id=1c262ad603&e=d712571e7b
+*/
 struct timer_event {
 	uint32_t handle;
 	int session;

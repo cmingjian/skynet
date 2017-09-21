@@ -132,6 +132,7 @@ timing_resume(lua_State *L) {
 
 	lua_CFunction co_resume = lua_tocfunction(L, lua_upvalueindex(3));
 
+	// 参数栈和lua调用传进来的一模一样
 	return co_resume(L);
 }
 
@@ -198,6 +199,10 @@ lyield_co(lua_State *L) {
 	return timing_yield(L);
 }
 
+/*
+ 这个模块的作用是找出系统中的热点
+ 把coroutine.resume或coroutine.yield作为第三个上值，而不是每次都查找，是为了减少性能损失？
+ * */
 int
 luaopen_profile(lua_State *L) {
 	luaL_checkversion(L);
@@ -211,24 +216,27 @@ luaopen_profile(lua_State *L) {
 		{ NULL, NULL },
 	};
 	luaL_newlibtable(L,l);
-	lua_newtable(L);	// table thread->start time
-	lua_newtable(L);	// table thread->total time
+	lua_newtable(L);	// table thread->start time，以协程为key，value是开始时间
+	lua_newtable(L);	// table thread->total time，以协程为key，value是总时间
 
 	lua_newtable(L);	// weak table
 	lua_pushliteral(L, "kv");
 	lua_setfield(L, -2, "__mode");
 
-	lua_pushvalue(L, -1);
+	lua_pushvalue(L, -1);	// 因为lua_setmetatable会把栈顶的值pop掉，所以要push多一次栈顶的table（即{"__mode"= "kv"}）
 	lua_setmetatable(L, -3); 
 	lua_setmetatable(L, -3);
 
 	lua_pushnil(L);	// cfunction (coroutine.resume or coroutine.yield)
+	// 把数组 l 中的所有函数 （参见 luaL_Reg） 注册到栈顶的表中（该表在可选的上值之下，见下面的解说）。
+	// 注意第三个参数，若 nup 不为零， 所有的函数都共享 nup 个上值。 这些值必须在调用之前，压在表之上。 这些值在注册完毕后都会从栈弹出。
+	// 本例中，3即前面push的nil和两个metatable为{"__mode"= "kv"}的空table
 	luaL_setfuncs(L,l,3);
 
-	int libtable = lua_gettop(L);
+	int libtable = lua_gettop(L);	// 现在栈顶只剩下库table
 
 	lua_getglobal(L, "coroutine");
-	lua_getfield(L, -1, "resume");
+	lua_getfield(L, -1, "resume");	// 获取lua库函数，coroutine.resume（即coroutine中的resume）
 
 	lua_CFunction co_resume = lua_tocfunction(L, -1);
 	if (co_resume == NULL)
@@ -237,12 +245,13 @@ luaopen_profile(lua_State *L) {
 
 	lua_getfield(L, libtable, "resume");
 	lua_pushcfunction(L, co_resume);
-	lua_setupvalue(L, -2, 3);
+	lua_setupvalue(L, -2, 3); 	// 设置闭包上值的值。 它把栈顶的值弹出并赋于上值并返回上值的名字
+	// 设置index为-2的闭包的第3个上值为co_resume,即设置本库中lresume的第三个上值为coroutine.resume
 	lua_pop(L,1);
 
 	lua_getfield(L, libtable, "resume_co");
 	lua_pushcfunction(L, co_resume);
-	lua_setupvalue(L, -2, 3);
+	lua_setupvalue(L, -2, 3);	// 作用同上
 	lua_pop(L,1);
 
 	lua_getfield(L, -1, "yield");
@@ -254,13 +263,16 @@ luaopen_profile(lua_State *L) {
 
 	lua_getfield(L, libtable, "yield");
 	lua_pushcfunction(L, co_yield);
-	lua_setupvalue(L, -2, 3);
+	lua_setupvalue(L, -2, 3);	// 设置本库中lyield的第三个上值为coroutine.resume
 	lua_pop(L,1);
 
 	lua_getfield(L, libtable, "yield_co");
 	lua_pushcfunction(L, co_yield);
-	lua_setupvalue(L, -2, 3);
+	lua_setupvalue(L, -2, 3);	// 设置本库中lyield_co的第三个上值为coroutine.resume
 	lua_pop(L,1);
+
+	// 注意：除了已经设置过值的函数，其余的lstart和lstop的第三个上值为nil
+	// 而索引是1和2的table是l中所有函数都共享的上值，
 
 	lua_settop(L, libtable);
 
