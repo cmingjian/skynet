@@ -175,25 +175,28 @@ function suspend(co, result, command, param, size)
 		error(debug.traceback(co,tostring(command)))
 	end
 	if command == "CALL" then
-		session_id_coroutine[param] = co
+		session_id_coroutine[param] = co	-- 发起CALL的时候,会把协程存起来,使用的代码见raw_dispatch_message
 	elseif command == "SLEEP" then
 		session_id_coroutine[param] = co
 		sleep_session[co] = param
 	elseif command == "RETURN" then
 		local co_session = session_coroutine_id[co]
-		if co_session == 0 then
+		if co_session == 0 then	-- 如果send的消息中调用了,repack,就会执行到这里, 是消息回调写错了
 			if size ~= nil then
-				c.trash(param, size)
+				c.trash(param, size)	-- 要把retpack的结果回收掉
 			end
-			return suspend(co, coroutine_resume(co, false))	-- send don't need ret
+			return suspend(co, coroutine_resume(co, false))	-- 并向发送错误消息给自己, send don't need ret
 		end
 		local co_address = session_coroutine_address[co]
-		if param == nil or session_response[co] then
+		if param == nil or session_response[co] then	-- 返回的结果为空是不允许的
 			error(debug.traceback(co))
 		end
 		session_response[co] = true
 		local ret
 		if not dead_service[co_address] then
+			-- 将返回结果param和消息大小size,作为PTYPE_RESPONSE这类消息的参数发送到源地址
+			-- 源地址是被call方在处理消息的回调raw_dispatch_message中记录下来的
+			-- call发起方在PTYPE_RESPONSE的回调中raw_dispatch_message
 			ret = c.send(co_address, skynet.PTYPE_RESPONSE, co_session, param, size) ~= nil
 			if not ret then
 				-- If the package is too large, returns nil. so we should report error back
@@ -394,10 +397,10 @@ skynet.unpack = assert(c.unpack)
 skynet.tostring = assert(c.tostring)
 skynet.trash = assert(c.trash)
 
-		-- 阻塞等待返回值
+-- 理解call消息的处理流程,关键在于被call方的消息处理函数中必须调用skynet.retpack
 local function yield_call(service, session)
-	watching_session[session] = service
-	local succ, msg, sz = coroutine_yield("CALL", session)
+	watching_session[session] = service		-- 1.表示正在watching，另一个服务service
+	local succ, msg, sz = coroutine_yield("CALL", session)	-- yield的返回值,是下次resume传进来的参数
 	watching_session[session] = nil
 	if not succ then
 		error "call failed"
@@ -425,7 +428,8 @@ end
 function skynet.ret(msg, sz)
 	msg = msg or ""
 	return coroutine_yield("RETURN", msg, sz)
-	--会让出到raw_dispatch_message函数中，参数给suspend,就成为:suspend(co, true, "RETURN", msg, sz)
+	-- 会让出到raw_dispatch_message函数中，参数作为resume的返回值, 消息处理函数调用skynet.repack以后,
+	-- suspend(co, coroutine_resume(co, session,source, p.unpack(msg,sz)))处继续执行:suspend(co, true, "RETURN", msg, sz)
 end
 
 function skynet.response(pack)
@@ -489,7 +493,7 @@ end
 
 local function raw_dispatch_message(prototype, msg, sz, session, source)
 	-- skynet.PTYPE_RESPONSE = 1, read skynet.h
-	if prototype == 1 then	--是不是等待返回的协程（类似于erlang的call中，send以后的receive）
+	if prototype == 1 then
 		local co = session_id_coroutine[session]
 		if co == "BREAK" then
 			session_id_coroutine[session] = nil
@@ -497,6 +501,8 @@ local function raw_dispatch_message(prototype, msg, sz, session, source)
 			unknown_response(session, source, msg, sz)
 		else
 			session_id_coroutine[session] = nil
+			-- 将 true, msg, sz作为参数,传递给上次yeild出的返回值,继续执行
+			-- 即yeild_call中coroutine_yield("CALL", session)的返回值
 			suspend(co, coroutine_resume(co, true, msg, sz))
 		end
 	else
@@ -520,7 +526,7 @@ local function raw_dispatch_message(prototype, msg, sz, session, source)
 			local co = co_create(f)
 			session_coroutine_id[co] = session
 			session_coroutine_address[co] = source
-			-- coroutine_resume 返回的参数(true, "EXIT")给 suspend 作为参数，此次
+			-- coroutine_resume 返回的参数(true, "EXIT")给 suspend 作为参数
 			suspend(co, coroutine_resume(co, session,source, p.unpack(msg,sz)))
 		elseif session ~= 0 then
 			c.send(source, skynet.PTYPE_ERROR, session, "")
