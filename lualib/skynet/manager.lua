@@ -3,6 +3,7 @@ local c = require "skynet.core"
 
 function skynet.launch(...)
 	local addr = c.command("LAUNCH", table.concat({...}," "))
+	-- addr是":01000004"这种形式的字符串地址
 	if addr then
 		return tonumber("0x" .. string.sub(addr , 2))
 	end

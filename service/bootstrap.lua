@@ -5,11 +5,14 @@ local memory = require "memory"
 
 skynet.start(function()
 	local sharestring = tonumber(skynet.getenv "sharestring" or 4096)
-	memory.ssexpand(sharestring)
+	memory.ssexpand(sharestring)	-- 设置sharstring大小
 
 	local standalone = skynet.getenv "standalone"
 
+	-- 后续启动服务都通过这个服务, skynet.newservice和skynet.uniqueservice等
+	-- 两个参数会拼接成"snlua launcher"
 	local launcher = assert(skynet.launch("snlua","launcher"))
+	-- 返回值是整数
 	skynet.name(".launcher", launcher)
 
 	local harbor_id = tonumber(skynet.getenv "harbor" or 0)
@@ -25,6 +28,7 @@ skynet.start(function()
 		skynet.name(".cslave", slave)
 
 	else
+		-- standalone表示是否有cmaster节点
 		if standalone then
 			if not pcall(skynet.newservice,"cmaster") then
 				skynet.abort()

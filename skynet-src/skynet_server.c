@@ -49,7 +49,7 @@ struct skynet_context {
 	FILE * logfile;
 	uint64_t cpu_cost;	// in microsec
 	uint64_t cpu_start;	// in microsec
-	char result[32];				// ！！ 服务名字
+	char result[32];				// ！！ 服务名字,形式如":01000003",对应handle为1000003
 	uint32_t handle;				// 服务handle，高8为handle_storage.harbor，低24位为服务id
 	int session_id;					// 前一个消息的session_id, 当消息类型为PTYPE_TAG_ALLOCSESSION时，自动分配session_id
 	int ref;						// 服务上下文被使用的次数，当ref降到0的时候，ctx会被销毁
@@ -439,10 +439,12 @@ cmd_name(struct skynet_context * context, const char * param) {
 	int size = strlen(param);
 	char name[size+1];
 	char handle[size+1];
+	// 传入参数的一般格式是 ".launcher :01000003"
 	sscanf(param,"%s %s",name,handle);
 	if (handle[0] != ':') {
 		return NULL;
 	}
+	// 后面两个char指针加1忽略第一个字符
 	uint32_t handle_id = strtoul(handle+1, NULL, 16);
 	if (handle_id == 0) {
 		return NULL;
@@ -492,6 +494,8 @@ cmd_launch(struct skynet_context * context, const char * param) {
 	char * args = tmp;
 	char * mod = strsep(&args, " \t\r\n");
 	args = strsep(&args, "\r\n");
+	// snlua启动以后, 启动服务都走这里, 如果mod参数是snlua的话,那么所有服务启动都走到snlua服务的init_cb回调
+	// 所以,都用到loader.lua来跑各个服务的启动
 	struct skynet_context * inst = skynet_context_new(mod,args);
 	if (inst == NULL) {
 		return NULL;
@@ -528,6 +532,7 @@ static const char *
 cmd_starttime(struct skynet_context * context, const char * param) {
 	uint32_t sec = skynet_starttime();
 	sprintf(context->result,"%u",sec);
+	printf("context->result:%s", context->result);
 	return context->result;
 }
 

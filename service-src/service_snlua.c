@@ -134,7 +134,7 @@ init_cb(struct snlua *l, struct skynet_context *ctx, const char * args, size_t s
 
 static int
 launch_cb(struct skynet_context * context, void *ud, int type, int session, uint32_t source , const void * msg, size_t sz) {
-	// 这个回调只会处理(snlua_init发送的）第一个消息，处理完以后，回调被设为NULL
+	// 这个回调只会处理(snlua_init发送的）第一个消息，处理完以后，
 	assert(type == 0 && session == 0);
 	struct snlua *l = ud;
 	skynet_callback(context, NULL, NULL);

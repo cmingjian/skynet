@@ -232,6 +232,7 @@ const char *
 skynet_handle_namehandle(uint32_t handle, const char *name) {
 	rwlock_wlock(&H->lock);
 
+	// 注册和插入的平均和最坏情况是O(N)
 	const char * ret = _insert_name(H, name, handle);
 
 	rwlock_wunlock(&H->lock);

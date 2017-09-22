@@ -581,6 +581,7 @@ end
 
 function skynet.address(addr)
 	if type(addr) == "number" then
+		-- 获取":01000003"形式的地址(16位整数,至少8位,前面的0也显示)
 		return string.format(":%08x",addr)
 	else
 		return tostring(addr)
