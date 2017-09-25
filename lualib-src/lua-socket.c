@@ -1,3 +1,5 @@
+#define LUA_LIB
+
 #include "skynet_malloc.h"
 
 #include <stdlib.h>
@@ -255,6 +257,9 @@ static int
 lclearbuffer(lua_State *L) {
 	struct socket_buffer * sb = lua_touserdata(L, 1);
 	if (sb == NULL) {
+		if (lua_isnil(L, 1)) {
+			return 0;
+		}
 		return luaL_error(L, "Need buffer object at param 1");
 	}
 	luaL_checktype(L,2,LUA_TTABLE);
@@ -565,8 +570,9 @@ lsendlow(lua_State *L) {
 	int id = luaL_checkinteger(L, 1);
 	int sz = 0;
 	void *buffer = get_buffer(L, 2, &sz);
-	skynet_socket_send_lowpriority(ctx, id, buffer, sz);
-	return 0;
+	int err = skynet_socket_send_lowpriority(ctx, id, buffer, sz);
+	lua_pushboolean(L, !err);
+	return 1;
 }
 
 static int
@@ -674,8 +680,8 @@ ludp_address(lua_State *L) {
 	return 2;
 }
 
-int
-luaopen_socketdriver(lua_State *L) {
+LUAMOD_API int
+luaopen_skynet_socketdriver(lua_State *L) {
 	luaL_checkversion(L);
 	luaL_Reg l[] = {
 		{ "buffer", lnewbuffer },
