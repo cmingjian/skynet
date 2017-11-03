@@ -17,7 +17,7 @@ sp_invalid(int efd) {
 
 static int
 sp_create() {
-	return epoll_create(1024);
+	return epoll_create(1024);	// linux2.6以后,size参数已经没有用了,也可以用epoll_create1()来代替
 }
 
 static void
@@ -30,7 +30,7 @@ sp_add(int efd, int sock, void *ud) {
 	struct epoll_event ev;
 	ev.events = EPOLLIN;
 	ev.data.ptr = ud;
-	if (epoll_ctl(efd, EPOLL_CTL_ADD, sock, &ev) == -1) {
+	if (epoll_ctl(efd, EPOLL_CTL_ADD, sock, &ev) == -1) {	// EPOLL_CTL_ADD 添加 fd到efd的兴趣列表中
 		return 1;
 	}
 	return 0;
@@ -52,12 +52,12 @@ sp_write(int efd, int sock, void *ud, bool enable) {
 static int 
 sp_wait(int efd, struct event *e, int max) {
 	struct epoll_event ev[max];
-	int n = epoll_wait(efd , ev, max, -1);
+	int n = epoll_wait(efd , ev, max, -1);	// timeout=-1,一直阻塞知道兴趣列表中的文件描述符上有时间产生
 	int i;
 	for (i=0;i<n;i++) {
 		e[i].s = ev[i].data.ptr;
 		unsigned flag = ev[i].events;
-		e[i].write = (flag & EPOLLOUT) != 0;
+		e[i].write = (flag & EPOLLOUT) != 0;				// 普通数据可写
 		e[i].read = (flag & (EPOLLIN | EPOLLHUP)) != 0;
 		e[i].error = (flag & EPOLLERR) != 0;
 	}

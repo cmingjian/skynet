@@ -22,15 +22,15 @@
 #define MAX_SOCKET_P 16
 #define MAX_EVENT 64
 #define MIN_READ_BUFFER 64
-#define SOCKET_TYPE_INVALID 0
-#define SOCKET_TYPE_RESERVE 1
-#define SOCKET_TYPE_PLISTEN 2
-#define SOCKET_TYPE_LISTEN 3
-#define SOCKET_TYPE_CONNECTING 4
-#define SOCKET_TYPE_CONNECTED 5
-#define SOCKET_TYPE_HALFCLOSE 6
-#define SOCKET_TYPE_PACCEPT 7
-#define SOCKET_TYPE_BIND 8
+#define SOCKET_TYPE_INVALID 0    // 无效的sock fe
+#define SOCKET_TYPE_RESERVE 1    // 预留已经被申请 即将被使用
+#define SOCKET_TYPE_PLISTEN 2    // listen fd但是未加入epoll管理
+#define SOCKET_TYPE_LISTEN 3     // 监听到套接字已经加入epoll管理
+#define SOCKET_TYPE_CONNECTING 4 // 尝试连接的socket fd
+#define SOCKET_TYPE_CONNECTED 5  // 已经建立连接的socket 主动conn或者被动accept的套接字 已经加入epoll管理
+#define SOCKET_TYPE_HALFCLOSE 6  // 已经在应用层关闭了fd 但是数据还没有发送完 还没有close
+#define SOCKET_TYPE_PACCEPT 7    // accept返回的fd 未加入epoll
+#define SOCKET_TYPE_BIND 8       // 其他类型的fd 如 stdin stdout等
 
 #define MAX_SOCKET (1<<MAX_SOCKET_P)
 
@@ -69,17 +69,18 @@ struct write_buffer {
 #define SIZEOF_UDPBUFFER (sizeof(struct write_buffer))
 
 struct wb_list {
-	struct write_buffer * head;
+	struct write_buffer * head;		// 发送缓冲区链表头指针和尾指针
 	struct write_buffer * tail;
 };
 
+// 应用层的socket
 struct socket {
-	uintptr_t opaque;
+	uintptr_t opaque;				// 在skynet中用于保存服务的handle
 	struct wb_list high;
 	struct wb_list low;
 	int64_t wb_size;
-	int fd;
-	int id;
+	int fd;							// 对应内核分配的fd
+	int id;							// 应用层维护的一个与fd对应的id
 	uint8_t protocol;
 	uint8_t type;
 	uint16_t udpconnecting;
@@ -103,13 +104,14 @@ struct socket_server {
 	int event_n;
 	int event_index;
 	struct socket_object_interface soi;
-	struct event ev[MAX_EVENT];
+	struct event ev[MAX_EVENT];			// 所有就绪的fd的event先记录在这里,然后再遍历处理
 	struct socket slot[MAX_SOCKET];
 	char buffer[MAX_INFO];
 	uint8_t udpbuffer[MAX_UDP_PACKAGE];
 	fd_set rfds;
 };
 
+// 以下10个结构用于控制包体结构
 struct request_open {
 	int id;
 	int port;
@@ -170,6 +172,7 @@ struct request_udp {
 	uintptr_t opaque;
 };
 
+// 控制命令请求包
 /*
 	The first byte is TYPE
 
@@ -335,7 +338,7 @@ socket_server_create() {
 		fprintf(stderr, "socket-server: create socket pair failed.\n");
 		return NULL;
 	}
-	if (sp_add(efd, fd[0], NULL)) {
+	if (sp_add(efd, fd[0], NULL)) {	// 外部通过往fd[1]写东西, fd[0]会收到,用来时间对socket_server的控制
 		// add recvctrl_fd to event poll
 		fprintf(stderr, "socket-server: can't add server fd to event pool.\n");
 		close(fd[0]);
@@ -1322,7 +1325,7 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 				ss->checkctrl = 0;
 			}
 		}
-		if (ss->event_index == ss->event_n) {
+		if (ss->event_index == ss->event_n) {	// 如果处理完所有socket事件,就再次执行wait
 			ss->event_n = sp_wait(ss->event_fd, ss->ev, MAX_EVENT);
 			ss->checkctrl = 1;
 			if (more) {
@@ -1337,6 +1340,7 @@ socket_server_poll(struct socket_server *ss, struct socket_message * result, int
 				return -1;
 			}
 		}
+		// 否则就处理下一个socket事件
 		struct event *e = &ss->ev[ss->event_index++];
 		struct socket *s = e->s;
 		if (s == NULL) {
